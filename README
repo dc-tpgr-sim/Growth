@@ -1,0 +1,54 @@
+This is a Matlab system which makes use of a test-particle set with position, velocity, magnetic field strength, and time of flight, at source and target, for some number of particles, and returns Langmuir-wave growth rates.
+
+
+Result Reformation
+
+gyroterpolate.m 
+
+This takes the raw data for each particle (the last 1,000 positions and velocities) and fits an interpolating gyro-orbit function to it, then uses that to interpolate to the actual strike values at the target plane.  Uses the HyperSVD() algebraic circle-fitting function by Nikolai Chernov (http://people.cas.uab.edu/~mosya/cl/), though others could be substituted.
+
+hemi_fill.m
+
+Takes particles which were launched at one azimuthal angle, and rotates the whole system to get a gyrotropic set with a constant solid angle subtended.
+
+mirror_remanip.m
+
+This utility script is set up to take the raw output from the Mirror Shards test-particle system, and do various math and manipulations, including gyroterpolate() and hemi_fill(), to get a neatly packaged final result set for use by later stages.  The data Mirror Shards returns is: three matrices, of the final 1,000 points for each particle, of position, velocity, and magnetic field, and a `result' array of data regarding travel times.
+
+
+Background/Beam Definition Structure Builder
+
+build_dyn_struct.m
+
+This takes a launch period, sampling period, and structures that define the ionospheric background, secondary background, and beams, and builds a parent structure encompassing all of that.  It performs a couple of simple sanity checks, and builds a vector with the start times for each segment of the beam structure, as well as the `end' time.
+
+dynamic_distribution.m
+(with maxwellian.m)
+
+Takes a time, the input data from the test particle simulation and its map structure, and a definition structure made by build_dyn_struct(), and returns the Maxwellian for the given time using maxwellian().
+
+
+Distribution Reduction
+
+azi_sum.m
+(with azi_sum_stash.m and array_checksum.m)
+
+The first step of reduction is to undo all that hard work hemi_fill() did.  In gyrotropic cases the azimuthal angle has no effect on time of flight, so we can do this before we deal with any time summation issues.
+
+This function will be run many times, and the uniquetol() required to get the indices of unique v_perp and v_parallel is quite slow.  The result is also identical for a given set of input velocity vectors, so we can save the result, and reuse it for every azi_sum() in a given run.  This is what azi_sum_stash(), with its friend array_checksum(), both included, accomplish: compare input vs. stored checksums, and if it checks out, just pass back saved results.  Saves and checksums are stored as persistent variables in the function-local context.
+
+time_azi_sum_chain.m
+
+A simple intermediate utility function, which chains dynamic_distribution() to azi_sum(), for great justice.
+
+perp_sum.m
+
+Now we sum over the perpendicular velocities, to get a parallel reduced distribution function.  This just straight up returns the RDF, no more structy stuff since we're combining things.  I wonder how setting the bin centers arbitrarily might change things in the results...
+
+
+Growth Rate Utility Script
+
+mirror_gr_stack.m
+
+Aaand the remainder is done in another sectioned script.  The memory usage of this gets untenable for small timesteps: potentially hundreds of GB.  Recoding it to not keep all data (only that which affects the current detector timeslice or whatever) would help.  Making it cluster-deployable would be better, but that would take a good bit of work.
+
